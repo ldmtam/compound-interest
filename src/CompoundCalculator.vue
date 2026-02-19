@@ -254,7 +254,7 @@ function runCompare() {
   border: 1px solid #e2e8f0;
   border-radius: 16px;
   width: 100%;
-  max-width: 1200px;
+  max-width: 1400px;
   overflow: hidden;
   box-shadow: 0 8px 40px rgba(15, 23, 42, 0.1);
 }
@@ -390,7 +390,7 @@ function runCompare() {
 /* ── Compare cards ── */
 .compare-cards {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(4, minmax(180px, 1fr));
   gap: 14px;
 }
 
@@ -398,8 +398,9 @@ function runCompare() {
   background: #f8fafc;
   border: 1.5px solid #e2e8f0;
   border-radius: 12px;
-  padding: 18px 16px;
+  padding: 18px 20px;
   position: relative;
+  min-width: 0;
 }
 
 .cmp-freq-dot {
@@ -433,10 +434,12 @@ function runCompare() {
   font-size: 12px;
   color: #64748b;
   margin-bottom: 6px;
+  gap: 8px;
 }
 .cmp-val {
   font-weight: 700;
   font-size: 13px;
+  white-space: nowrap;
 }
 .cmp-val.neutral {
   color: #334155;
