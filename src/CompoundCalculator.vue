@@ -84,62 +84,17 @@
       <!-- Content -->
       <div class="content">
         <template v-if="results">
-          <!-- Winner banner -->
-          <div
-            class="winner-banner"
-            :style="{
-              borderColor: results.winner.color,
-              background: results.winner.color + '12',
-            }"
-          >
-            <span class="winner-icon">🏆</span>
-            <div>
-              <div class="winner-title">Kỳ đầu tư hiệu quả nhất</div>
-              <div
-                class="winner-name"
-                :style="{ color: results.winner.color }"
-              >
-                {{ results.winner.icon }} {{ results.winner.label }}
-              </div>
-            </div>
-            <div class="winner-gain">
-              +{{ fmtNumber(Math.round(results.gain)) }} VND
-              <span class="winner-vs">so với kỳ kém nhất</span>
-            </div>
-          </div>
-
           <!-- Compare cards -->
           <div class="compare-cards">
             <div
               v-for="item in results.items"
               :key="item.key"
-              :class="['cmp-card', { best: item.isBest, worst: item.isWorst }]"
-              :style="
-                item.isBest
-                  ? { borderColor: item.color, background: item.color + '08' }
-                  : {}
-              "
+              class="cmp-card"
             >
               <div
-                class="cmp-badge"
-                :style="{ color: item.color }"
-                v-if="item.isBest"
-              >
-                👑 Tốt nhất
-              </div>
-              <div
-                class="cmp-badge worst-badge"
-                v-else-if="item.isWorst"
-              >
-                📉 Kém nhất
-              </div>
-              <div
-                class="cmp-rank"
-                v-else
-              >
-                {{ item.rank }}
-              </div>
-
+                class="cmp-freq-dot"
+                :style="{ background: item.color }"
+              ></div>
               <div class="cmp-label">{{ item.icon }} {{ item.label }}</div>
               <div class="cmp-contribution">
                 {{ fmtNumber(Math.round(item.perPeriod)) }} VND / kỳ
@@ -167,42 +122,7 @@
                   >{{ fmtNumber(Math.round(item.finalBalance)) }}</span
                 >
               </div>
-
-              <div
-                v-if="!item.isBest"
-                class="cmp-diff"
-              >
-                −
-                {{
-                  fmtNumber(
-                    Math.round(
-                      results.items[0].finalBalance - item.finalBalance,
-                    ),
-                  )
-                }}
-                VND so với tốt nhất
-              </div>
             </div>
-          </div>
-
-          <!-- Chart -->
-          <div class="chart-area">
-            <div class="chart-header">
-              <p class="chart-unit">
-                Đơn vị: triệu đồng — Kết quả tích lũy theo thời gian
-              </p>
-              <div class="chart-hints">
-                <span>🖱️ Cuộn để zoom</span>
-                <span>🖐️ Kéo để di chuyển</span>
-                <button
-                  class="reset-zoom-btn"
-                  @click="resetZoom"
-                >
-                  ↺ Reset zoom
-                </button>
-              </div>
-            </div>
-            <canvas ref="chartCanvas"></canvas>
           </div>
 
           <!-- Insight -->
@@ -236,7 +156,7 @@
 </template>
 
 <script setup>
-import { ref, nextTick } from 'vue';
+import { ref } from 'vue';
 import SliderInput from './SliderInput.vue';
 
 // ─── Config ──────────────────────────────────────────────────────────────────
@@ -275,24 +195,15 @@ const FREQS = [
   },
 ];
 
-const RANK_LABELS = ['', '🥇', '🥈', '🥉', '4️⃣'];
-
 // ─── State ───────────────────────────────────────────────────────────────────
 const principal = ref(100_000_000);
 const yearlyAmount = ref(24_000_000);
 const rate = ref(10);
 const time = ref(10);
 const results = ref(null);
-const chartCanvas = ref(null);
-let chartInstance = null;
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 const fmtNumber = (n) => new Intl.NumberFormat('vi-VN').format(Math.round(n));
-const fmtShort = (n) => {
-  if (n >= 1_000_000_000) return (n / 1_000_000_000).toFixed(2) + ' tỷ';
-  if (n >= 1_000_000) return (n / 1_000_000).toFixed(1) + ' tr';
-  return fmtNumber(n);
-};
 
 // ─── Compound calc ───────────────────────────────────────────────────────────
 function finalBalance(p, perPeriod, periodsPerYear, years, annualRate) {
@@ -301,19 +212,6 @@ function finalBalance(p, perPeriod, periodsPerYear, years, annualRate) {
   for (let i = 0; i < periodsPerYear * years; i++)
     bal = bal * (1 + r) + perPeriod;
   return bal;
-}
-
-function buildSeries(p, perPeriod, periodsPerYear, years, annualRate) {
-  const r = annualRate / 100 / periodsPerYear;
-  const n = periodsPerYear * years;
-  const sampleEvery = Math.max(1, Math.round(periodsPerYear / 4));
-  const series = [];
-  let bal = p;
-  for (let i = 0; i <= n; i++) {
-    if (i > 0) bal = bal * (1 + r) + perPeriod;
-    if (i % sampleEvery === 0) series.push(+(bal / 1_000_000).toFixed(2));
-  }
-  return series;
 }
 
 // ─── Compare ─────────────────────────────────────────────────────────────────
@@ -333,144 +231,17 @@ function runCompare() {
       finalBalance: bal,
       totalInvested,
       profit: bal - totalInvested,
-      isBest: false,
-      isWorst: false,
-      rank: '',
     };
-  }).sort((a, b) => b.finalBalance - a.finalBalance);
-
-  items.forEach((item, i) => {
-    item.rank = RANK_LABELS[i + 1] || `${i + 1}`;
-    item.isBest = i === 0;
-    item.isWorst = i === items.length - 1;
   });
 
-  const gain = items[0].finalBalance - items[items.length - 1].finalBalance;
-
-  // Chart labels (quarterly axis)
-  const totalSamples = yrs * 4 + 1;
-  const labels = Array.from({ length: totalSamples }, (_, i) => {
-    const yr = Math.floor(i / 4);
-    const q = i % 4;
-    return q === 0 ? `${2026 + yr}` : `Q${q + 1}/${2026 + yr}`;
-  });
-
-  const seriesMap = {};
-  for (const f of FREQS) {
-    const raw = buildSeries(
-      p,
-      yly / f.periodsPerYear,
-      f.periodsPerYear,
-      yrs,
-      r,
-    );
-    seriesMap[f.key] = Array.from(
-      { length: totalSamples },
-      (_, i) => raw[i] ?? null,
-    );
-  }
-
-  // Insight
+  // Insight (giữ nguyên logic so sánh nhưng ko hiện trên UI card)
   const weeklyFinal = items.find((i) => i.key === 'weekly').finalBalance;
   const monthlyFinal = items.find((i) => i.key === 'monthly').finalBalance;
   const diff = weeklyFinal - monthlyFinal;
   const pct = ((diff / monthlyFinal) * 100).toFixed(2);
   const insight = `Đầu tư theo tuần vượt trội hơn theo tháng khoảng ${fmtNumber(Math.round(diff))} VND (${pct}%) sau ${yrs} năm. Nguyên nhân: vốn được đưa vào thị trường sớm hơn và tái đầu tư qua nhiều chu kỳ hơn trong năm, giúp lãi kép tích lũy nhanh hơn. Khoảng cách này càng lớn khi lãi suất và thời gian tăng.`;
 
-  results.value = {
-    items,
-    winner: { ...items[0] },
-    gain,
-    insight,
-    labels,
-    seriesMap,
-  };
-  nextTick(() => renderChart(labels, seriesMap, items));
-}
-
-// ─── Chart ───────────────────────────────────────────────────────────────────
-function renderChart(labels, seriesMap, items) {
-  if (!chartCanvas.value) return;
-  chartInstance?.destroy();
-  const Chart = window.Chart;
-  if (!Chart) return;
-
-  const datasets = FREQS.map((f) => {
-    const item = items.find((i) => i.key === f.key);
-    return {
-      label: `${f.icon} ${f.label}`,
-      data: seriesMap[f.key],
-      borderColor: f.color,
-      borderWidth: item?.isBest ? 3 : 1.8,
-      backgroundColor: 'transparent',
-      fill: false,
-      tension: 0.4,
-      pointRadius: 0,
-      pointHoverRadius: 5,
-      borderDash: item?.isWorst ? [5, 4] : [],
-    };
-  });
-
-  chartInstance = new Chart(chartCanvas.value, {
-    type: 'line',
-    data: { labels, datasets },
-    options: {
-      responsive: true,
-      maintainAspectRatio: true,
-      interaction: { mode: 'index', intersect: false },
-      plugins: {
-        legend: {
-          labels: {
-            color: '#475569',
-            font: { family: "'Be Vietnam Pro', sans-serif", size: 12 },
-            usePointStyle: true,
-          },
-        },
-        tooltip: {
-          backgroundColor: '#ffffff',
-          borderColor: '#e2e8f0',
-          borderWidth: 1,
-          titleColor: '#64748b',
-          bodyColor: '#1e293b',
-          titleFont: { family: "'Be Vietnam Pro', sans-serif" },
-          bodyFont: { family: "'Be Vietnam Pro', sans-serif" },
-          callbacks: {
-            label: (v) =>
-              ` ${v.dataset.label}: ${fmtShort(v.parsed.y * 1_000_000)} VND`,
-          },
-        },
-        zoom: {
-          pan: { enabled: true, mode: 'x' },
-          zoom: {
-            wheel: { enabled: true },
-            pinch: { enabled: true },
-            mode: 'x',
-          },
-        },
-      },
-      scales: {
-        x: {
-          ticks: {
-            color: '#94a3b8',
-            font: { family: "'Be Vietnam Pro', sans-serif", size: 11 },
-            maxTicksLimit: 10,
-          },
-          grid: { color: '#f1f5f9' },
-        },
-        y: {
-          ticks: {
-            color: '#94a3b8',
-            font: { family: "'Be Vietnam Pro', sans-serif", size: 11 },
-          },
-          grid: { color: '#f1f5f9' },
-        },
-      },
-    },
-  });
-}
-
-function resetZoom() {
-  chartInstance?.resetZoom();
+  results.value = { items, insight };
 }
 </script>
 
@@ -525,7 +296,7 @@ function resetZoom() {
 .main {
   display: grid;
   grid-template-columns: 320px 1fr;
-  min-height: 640px;
+  min-height: 560px;
 }
 
 /* ── Sidebar ── */
@@ -613,83 +384,29 @@ function resetZoom() {
   display: flex;
   flex-direction: column;
   gap: 20px;
-  overflow-y: auto;
   background: #ffffff;
-}
-
-/* ── Winner banner ── */
-.winner-banner {
-  border: 2px solid;
-  border-radius: 12px;
-  padding: 16px 20px;
-  display: flex;
-  align-items: center;
-  gap: 16px;
-}
-.winner-icon {
-  font-size: 30px;
-  flex-shrink: 0;
-}
-.winner-title {
-  font-size: 11px;
-  color: #64748b;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-.winner-name {
-  font-size: 18px;
-  font-weight: 700;
-  margin-top: 3px;
-}
-.winner-gain {
-  margin-left: auto;
-  text-align: right;
-  font-size: 16px;
-  font-weight: 700;
-  color: #16a34a;
-  white-space: nowrap;
-}
-.winner-vs {
-  display: block;
-  font-size: 11px;
-  color: #64748b;
-  font-weight: 400;
-  margin-top: 2px;
 }
 
 /* ── Compare cards ── */
 .compare-cards {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 12px;
+  gap: 14px;
 }
+
 .cmp-card {
   background: #f8fafc;
   border: 1.5px solid #e2e8f0;
   border-radius: 12px;
-  padding: 16px;
-  transition:
-    border-color 0.2s,
-    background 0.2s;
-}
-.cmp-card.worst {
-  opacity: 0.65;
+  padding: 18px 16px;
+  position: relative;
 }
 
-.cmp-badge {
-  font-size: 10px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  margin-bottom: 8px;
-}
-.worst-badge {
-  color: #94a3b8;
-}
-.cmp-rank {
-  font-size: 18px;
-  margin-bottom: 6px;
+.cmp-freq-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-bottom: 10px;
 }
 
 .cmp-label {
@@ -700,25 +417,26 @@ function resetZoom() {
 }
 .cmp-contribution {
   font-size: 11px;
-  color: #64748b;
-  margin-bottom: 10px;
+  color: #94a3b8;
+  margin-bottom: 12px;
 }
 .cmp-divider {
   height: 1px;
   background: #e2e8f0;
-  margin-bottom: 10px;
+  margin-bottom: 12px;
 }
 
 .cmp-row {
   display: flex;
   justify-content: space-between;
-  font-size: 11px;
+  align-items: baseline;
+  font-size: 12px;
   color: #64748b;
-  margin-bottom: 5px;
+  margin-bottom: 6px;
 }
 .cmp-val {
   font-weight: 700;
-  font-size: 12px;
+  font-size: 13px;
 }
 .cmp-val.neutral {
   color: #334155;
@@ -728,69 +446,17 @@ function resetZoom() {
 }
 
 .total-row {
-  margin-top: 8px;
-  padding-top: 8px;
+  margin-top: 10px;
+  padding-top: 10px;
   border-top: 1px solid #e2e8f0;
 }
 .total-row span:first-child {
-  color: #334155;
+  font-size: 12px;
   font-weight: 600;
+  color: #334155;
 }
 .total-row .cmp-val {
-  font-size: 13px;
-}
-
-.cmp-diff {
-  margin-top: 10px;
-  font-size: 10px;
-  color: #94a3b8;
-  border-top: 1px dashed #e2e8f0;
-  padding-top: 8px;
-  line-height: 1.5;
-}
-
-/* ── Chart ── */
-.chart-area {
-  flex: 1;
-  min-height: 0;
-}
-.chart-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 10px;
-  gap: 12px;
-  flex-wrap: wrap;
-}
-.chart-unit {
-  font-size: 12px;
-  color: #94a3b8;
-}
-.chart-hints {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
-}
-.chart-hints span {
-  font-size: 11px;
-  color: #94a3b8;
-}
-.reset-zoom-btn {
-  padding: 4px 10px;
-  background: #f1f5f9;
-  border: 1.5px solid #e2e8f0;
-  border-radius: 6px;
-  font-family: 'Be Vietnam Pro', sans-serif;
-  font-size: 11px;
-  font-weight: 600;
-  color: #475569;
-  cursor: pointer;
-  transition: all 0.15s;
-}
-.reset-zoom-btn:hover {
-  background: #e2e8f0;
-  color: #0f172a;
+  font-size: 15px;
 }
 
 /* ── Insight ── */
